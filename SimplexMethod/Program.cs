@@ -9,8 +9,11 @@ namespace SimplexMethod
             Console.WriteLine("Нажмите Enter для решения задачи линейного программирования симлпексным методом");
             Console.ReadLine();
             Console.WriteLine("Будьте внимательны! Программа не защищена от ошибок ввода\n");
+            Console.WriteLine("Введите max, если решаете задачу максимизации; min, если решаете задачу минимизации: ");
             bool isMaximization = true;
+            Console.WriteLine("Укажите наибольшее количество переменных в ограничениях: ");
             int longestConstraintsCondition = 2; //Для ввода через командную строку
+
             double[] inputC = new double[] { 3, 4 }; //коэффициенты целевой функции
             double[,] inputX = new double[,] { 
                                                 { 1, 1 },
@@ -21,42 +24,82 @@ namespace SimplexMethod
             string[] conditionsInput = new string[] { ">=", "<=", ">=", ">=" };
             double[] inputB = new double[] { 20, 20, 10, 5 }; 
 
-            var simplex = new Simplex(longestConstraintsCondition, inputC, inputX, conditionsInput, inputB, isMaximization);
-            var simplexTable = simplex.simplexTable;
+            var simplex = new Simplex(inputC, inputX, conditionsInput, inputB, isMaximization);
+            var coeffsMatrix = simplex._coeffsMatrix;
+            var simplexDifference = simplex._simplexDifference;
+            var basicIndexes = simplex._basicIndexes;
+            var coeffsValues = simplex._coeffsValues;
+            var targetValue = simplex._targetValue;
 
-
-           /* for(int j = 0; j < inputB.Length; j++)
+            //Вывод решения
+            Console.Write("\n+");
+            for (int i = 0; i < 60; i++)
             {
-                for(int i = 0; i < 9; i++)
+                Console.Write("-");
+            }
+            Console.Write("+\n");
+
+            if (simplex.isUnlimited)
+            {
+                Console.WriteLine("\nЦелевая функция не ограничена. Решений нет.");
+                return;
+            }
+
+            if (simplex.isIncompatibility)
+            {
+                Console.WriteLine("\nСистема ограничений несовместна. Решений нет.");
+                return;
+            }
+
+            if (simplex.isAlternative)
+            {
+                Console.WriteLine("\nОбнаружен альтернативный оптимум. Дальнейшая оптимизация нецелесообразна.\n");
+                Console.WriteLine("Итоговый план:\n");
+            }
+           
+            /*foreach (var e in simplexTable)
+                Console.WriteLine(e);*/
+
+            Console.WriteLine("Итоговый план:\n");
+
+            for (int j = 0; j < inputB.Length; j++)
+            {
+                for (int i = 0; i < 9; i++)
                 {
-                    Console.Write(simplexTable[j,i]);
+                    Console.Write(coeffsMatrix[j, i]);
                     Console.Write("   ");
                 }
                 Console.WriteLine("");
-            }*/
-            foreach (var e in simplexTable)
-                Console.WriteLine(e);
+            }
+            return;
         }
     }
 
     public class Simplex
     {
-        public double[] simplexTable; //Имеет неправильный тип, пока что используется для тестирования результатов
-        public int unlimited;
+        public double[,] _coeffsMatrix;
+        public double[] _simplexDifference;
+        public int[] _basicIndexes;
+        public double[] _coeffsValues;
+        public double _targetValue;
 
-        public Simplex(int longestConstraintsCondition, double[] targetCoeffs, double[,] constraintsCoeffs, 
+        public bool isUnlimited;
+        public bool isIncompatibility;
+        public bool isAlternative;
+
+        public Simplex(double[] targetCoeffs, double[,] constraintsCoeffs,
             string[] constraintsSigns, double[] constraintsValues, bool isMaximization)
         {
             int inputLength = constraintsCoeffs.GetLength(1); //количество коэффициентов в строках
             int height = constraintsCoeffs.GetLength(0); //количество коэффициентов в столбцах
             int countToAdd = 0;
-            bool thereIsAMoreSign = false;          
+            bool thereIsAMoreSign = false;
 
             // ЗДЕСЬ НУЖНА ПРОВЕРКА НА МАКСИМИЗАЦИЮ ИЛИ МИНИМИЗАЦИЮ
             //Преобразует матрицу коэффициентов
             for (int i = 0; i < constraintsSigns.Length; i++)
                 if (constraintsSigns[i] == ">=")
-                { 
+                {
                     countToAdd++; //Для определения, сколько нужно ввести базисных переменных. Могут появиться и искусственные
                     thereIsAMoreSign = true;
                 }
@@ -74,8 +117,8 @@ namespace SimplexMethod
                 {
                     constraintsCoeffs[j, i] = 1;
                     basicIndexes[j] = i; //запись индексов базисных переменных внутри матрицы коэффициентов
-                }                   
-            }          
+                }
+            }
 
             for (int i = inputLength + height, j = 0; i < height + inputLength + countToAdd; i++, j++) //Ввод искусственных переменных,
                                                                                                        //называются также базисными
@@ -86,29 +129,29 @@ namespace SimplexMethod
                     basicIndexes[j] = i;
                 }
                 else
-                    i--;                                     
-            }        
+                    i--;
+            }
 
             ResizeArray(ref targetCoeffs, inputLength + height + countToAdd); //Добавление пустых ячеек в целевую функция до
                                                                               //длины матрицы коэффициентов
-            // ЗДЕСЬ НУЖНА ПРОВЕРКА НА МАКСИМИЗАЦИЮ ИЛИ МИНИМИЗАЦИЮ
-            // Поиск начального целевого вектора (обычно пишем над матрицей коэффициентов)
+                                                                              // ЗДЕСЬ НУЖНА ПРОВЕРКА НА МАКСИМИЗАЦИЮ ИЛИ МИНИМИЗАЦИЮ
+                                                                              // Поиск начального целевого вектора (обычно пишем над матрицей коэффициентов)
             if (thereIsAMoreSign) // Если в задаче был знак больше, то для максимизации необходимо ввести числа -M
                 for (int i = 0; i < countToAdd; i++)
-                    targetCoeffs[i + height + inputLength] = -1000000000000000;          
+                    targetCoeffs[i + height + inputLength] = -1000000;
 
             //Расчет целевого значения
-            double targetValue = 0; 
-            
+            double targetValue = 0;
+
             for (int i = 0; i < height; i++)
             {
                 targetValue = targetValue + targetCoeffs[basicIndexes[i]] * constraintsValues[i];
-            }           
+            }
 
-            double[] simplexDifference = new double[inputLength + height + countToAdd]; 
+            double[] simplexDifference = new double[inputLength + height + countToAdd];
 
             //Поиск симплексной разницы (нижняя строка таблицы)
-            for(int i = 0; i < simplexDifference.Length; i++)
+            for (int i = 0; i < simplexDifference.Length; i++)
             {
                 for (int j = 0; j < height; j++)
                     simplexDifference[i] += targetCoeffs[basicIndexes[j]] * constraintsCoeffs[j, i];
@@ -120,47 +163,60 @@ namespace SimplexMethod
 
             //ОСНОВНОЙ АЛГОРИТМ
             //Пересчет всех значений до тех пор, пока не будут выполнены условия
-            bool isEnd = false;
-            while (isEnd)
-            {
-                for(int i = 0; i < inputLength; i++)
+            bool isNotEnd = true;
+            int a = 0;
+            while (a != 2)
+            {               
+                if (isMaximization)
+                {
+                    Maximization(ref constraintsCoeffs, ref simplexDifference, ref basicIndexes, height, ref constraintsValues,
+                        inputLength, countToAdd, ref targetValue, ref targetCoeffs, ref mainLineIndex, ref isAlternative,
+                        ref isIncompatibility, ref isUnlimited);
+                    _coeffsMatrix = constraintsCoeffs;
+                    _simplexDifference = simplexDifference;
+                    _basicIndexes = basicIndexes;
+                    _coeffsValues = constraintsValues;
+                    _targetValue = targetValue;
+
+                    if (isAlternative)
+                        return;
+                    if (isIncompatibility)
+                        return;
+                    if (isUnlimited)
+                        return;
+
+                    a++;
+                }
+                else
+                {
+                    //Minimization();
+                }
+
+                for (int i = 0; i < inputLength; i++)
                 {
                     if (simplexDifference[i] < 0)
                     {
-                        if (isMaximization)
-                        {
-                            Maximization(ref constraintsCoeffs, ref simplexDifference, ref basicIndexes, height, ref constraintsValues,
-                                inputLength, countToAdd, ref targetValue, ref targetCoeffs, ref mainLineIndex);
-                            if (mainLineIndex == -1)
-                            {
-                                return ;
-                            }
-                        }
-                        else
-                        {
-                            //Minimization();
-                        }
+                        continue;
+                        if (i == inputLength - 1)
+                            isNotEnd = false;
                     }
-                    else
-                    {
-                        //Нужны проверки
-                        isEnd = true;
-                    }
+                    else break;
                 }
-            } 
-            //организовать выход в main функцию
+                //организовать выход в main функцию
+            }
         }
 
         //Метод для решения задачи максимизации
         public static void Maximization(ref double [,] constraintsCoeffs, ref double[] simplexDifference, ref int[] basicIndexes, 
             int height, ref double[] constraintsValues, int inputLength, int countToAdd, ref double targetValue, 
-            ref double[] targetCoeffs, ref int mainLineIndex) 
+            ref double[] targetCoeffs, ref int mainLineIndex, ref bool isAlternative, ref bool isIncompatibility, ref bool isUnlimited)
         {
-            int mainColumnIndex = FindMainColumn(simplexDifference);            
+            targetValue = 0;
+            int mainColumnIndex = FindMainColumn(simplexDifference);  
 
             if (mainLineIndex == -1)
             {
-                
+                isUnlimited = true;
                 return;
             }
             //Пересчет массива B
@@ -169,9 +225,17 @@ namespace SimplexMethod
                 if (j == mainLineIndex) //По ведущей строке
                     constraintsValues[j] = constraintsValues[j] / constraintsCoeffs[mainLineIndex, mainColumnIndex];
                 //По остальным строкам
-                else constraintsValues[j] = constraintsValues[j] - (constraintsCoeffs[j, mainColumnIndex] *
+                else
+                {
+                    constraintsValues[j] = constraintsValues[j] - (constraintsCoeffs[j, mainColumnIndex] *
                         constraintsValues[mainLineIndex]) / constraintsCoeffs[mainLineIndex, mainColumnIndex];
-            }
+                    if (constraintsValues[j] < 0)
+                    {
+                        isIncompatibility = true;
+                        return;
+                    }
+                }
+            }               
 
             //Пересчет коэффициентов по правилу прямоугольника
             for (int i = 0; i < inputLength + height + countToAdd; i++)
@@ -215,6 +279,21 @@ namespace SimplexMethod
                     simplexDifference[i] += targetCoeffs[basicIndexes[j]] * constraintsCoeffs[j, i];
                 simplexDifference[i] -= targetCoeffs[i];
             }
+
+            //проверка на альтернативный оптимум
+            for (int i = 0; i < height; i++)
+            {
+                if (simplexDifference[basicIndexes[i]] == 0)
+                {
+                    if (i == height - 1)
+                    {
+                        isAlternative = true;
+                        return; 
+                    }
+                    continue;
+                }
+                else break;
+            }
         }
 
         private static void ResizeArray(ref double[,] arr, int newM, int newN)
@@ -239,11 +318,15 @@ namespace SimplexMethod
             int columnIndex = 0;
             double min = double.MaxValue;
             for (int i = 0; i < simplexDifference.Length; i++)
+            {
+                if (min == simplexDifference[i])
+                    Console.WriteLine("Обнаружено вырожденное решение.");
                 if (min > simplexDifference[i] * (-1))
                 {
                     min = simplexDifference[i] * (-1);
                     columnIndex = i - 1;
                 }
+            }
             return columnIndex;
         }
 
@@ -257,15 +340,22 @@ namespace SimplexMethod
 
             double min = double.MaxValue;
             for (int i = 0; i < height; i++)
+            {
+                if (minBuffer[i] == min)
+                {
+                    Console.WriteLine("Обнаружено вырожденное решение.");
+                }
+
                 if (minBuffer[i] <= 0 || double.IsInfinity(minBuffer[i]))
                 {
                     continue;
                 }
-                else if(min > minBuffer[i])
+                else if (min > minBuffer[i])
                 {
-                    min = minBuffer[i];                                   //ГДЕ ТО ТУТ ВЫРОЖДЕННОЕ РЕШЕНИЕ
+                    min = minBuffer[i];
                     lineIndex = i;
                 }
+            }
             return lineIndex;
         } 
     }
