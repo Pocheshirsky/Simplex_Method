@@ -10,20 +10,19 @@ namespace SimplexMethod
             Console.ReadLine();
             Console.WriteLine("Будьте внимательны! Программа не защищена от ошибок ввода\n");
             Console.WriteLine("Введите max, если решаете задачу максимизации; min, если решаете задачу минимизации: ");
-            Console.ReadLine();
+            string method;
+            method = Console.ReadLine();
             bool isMaximization = true;
-            Console.WriteLine("Укажите наибольшее количество переменных в ограничениях: ");
-            int longestConstraintsCondition = 2; //Для ввода через командную строку
+            //Console.WriteLine("Укажите наибольшее количество переменных в ограничениях: ");
 
-            double[] inputC = new double[] { 3, 6, 4 }; //коэффициенты целевой функции
+            double[] inputC = new double[] { 1, -2, 1, -8, 1, 1 }; //коэффициенты целевой функции
             double[,] inputX = new double[,] { 
-                                                { 1, 6, 3 },
-                                                { 3, 1, 3 },
-                                                { 1, 3, 2 },
-                                                { 2, 3, 4 }
+                                                { 1, 4, 1, 3, -2, 1 },
+                                                { 1, 4, -1, -1, 0, 1 },
+                                                { 2, 6, 1, 4, -2, 1 }
                                              };
-            string[] conditionsInput = new string[] { "=", "=", "=", "=" };
-            double[] inputB = new double[] { 84, 42, 21, 42 }; 
+            string[] conditionsInput = new string[] { "=", "=", "=" };
+            double[] inputB = new double[] { 15, 5, 22 }; 
 
             var simplex = new Simplex(inputC, inputX, conditionsInput, inputB, isMaximization);
             var coeffsMatrix = simplex._coeffsMatrix;
@@ -31,6 +30,8 @@ namespace SimplexMethod
             var basicIndexes = simplex._basicIndexes;
             var coeffsValues = simplex._coeffsValues;
             var targetValue = simplex._targetValue;
+            var iterations = simplex._iterations;
+            var finallyLength = simplex._finallyLength;
 
             //Вывод решения
             Console.Write("\n+");
@@ -49,7 +50,6 @@ namespace SimplexMethod
             if (simplex.isIncompatibility)
             {
                 Console.WriteLine("\nСистема ограничений несовместна. Решений нет.");
-                return;
             }
 
             if (simplex.isAlternative)
@@ -57,29 +57,30 @@ namespace SimplexMethod
                 Console.WriteLine("\nОбнаружен альтернативный оптимум. Дальнейшая оптимизация нецелесообразна.\n");
             }
 
-            Console.WriteLine("Итоговый план:\n");
+            Console.WriteLine("Итоговый план:");
+            Console.WriteLine("Количество итераций: " + iterations + "\n");
             Console.WriteLine("Базис В   Матрица коэффициентов");
 
             for (int j = 0; j < inputB.Length; j++)
             {
                 basicIndexes[j] += 1;
                 Console.Write("X" + basicIndexes[j] + "    ");
-                Console.Write(coeffsValues[j] + "   ");
-                for (int i = 0; i < 7; i++)
+                Console.Write(Math.Round(coeffsValues[j], 2) + "   ");
+                for (int i = 0; i < finallyLength; i++)
                 {
                     
-                    Console.Write(coeffsMatrix[j, i]);
+                    Console.Write(Math.Round(coeffsMatrix[j, i], 2));
                     Console.Write("   ");
                 }
                 Console.WriteLine("");
             }
             Console.WriteLine("\nСимплексная разность: ");
-            for (int i = 0; i < 7; i++)
+            for (int i = 0; i < finallyLength; i++)
             {
-                Console.Write(simplexDifference[i]);
+                Console.Write(Math.Round(simplexDifference[i], 2));
                 Console.Write("   ");
             }
-            Console.WriteLine("\nZ = " + targetValue);
+            Console.WriteLine("\nZ = " + Math.Round(targetValue, 2));
             return;
         }
     }
@@ -91,10 +92,13 @@ namespace SimplexMethod
         public int[] _basicIndexes;
         public double[] _coeffsValues;
         public double _targetValue;
+        public int _iterations;
+        public int _finallyLength;
 
         public bool isUnlimited;
         public bool isIncompatibility;
         public bool isAlternative;
+
 
         public Simplex(double[] targetCoeffs, double[,] constraintsCoeffs,
             string[] constraintsSigns, double[] constraintsValues, bool isMaximization)
@@ -103,7 +107,7 @@ namespace SimplexMethod
             int height = constraintsCoeffs.GetLength(0); //количество коэффициентов в столбцах
             int basicsCount = 0;
             int artificialCount = 0;
-            bool thereIsArtificialVar = false;
+            bool thereIsArtificialVar = false;          
 
             // ЗДЕСЬ НУЖНА ПРОВЕРКА НА МАКСИМИЗАЦИЮ ИЛИ МИНИМИЗАЦИЮ
             // Приведение В к положительным значениям
@@ -130,6 +134,7 @@ namespace SimplexMethod
                 }
             }
 
+            _finallyLength = inputLength + basicsCount + artificialCount;
             int[] basicIndexes = new int[height]; //индексы базисных переменных внутри матрицы коэффициентов
 
             ResizeArray(ref constraintsCoeffs, height, inputLength + basicsCount + artificialCount); //Увеличение матрицы коэффициентов на
@@ -188,19 +193,14 @@ namespace SimplexMethod
             //ОСНОВНОЙ АЛГОРИТМ
             //Пересчет всех значений до тех пор, пока не будут выполнены условия
             bool isNotEnd = true;
-            int a = 0;
-            while (a != 2)
+            int iterations = 0;
+            while (iterations != 4)
             {               
                 if (isMaximization)
                 {
                     Maximization(ref constraintsCoeffs, ref simplexDifference, ref basicIndexes, height, ref constraintsValues,
                         inputLength, basicsCount, ref targetValue, ref targetCoeffs, ref isAlternative,
                         ref isIncompatibility, ref isUnlimited, basicsCount, artificialCount);
-                    _coeffsMatrix = constraintsCoeffs;
-                    _simplexDifference = simplexDifference;
-                    _basicIndexes = basicIndexes;
-                    _coeffsValues = constraintsValues;
-                    _targetValue = targetValue;
 
                     if (isAlternative)
                         return;
@@ -208,7 +208,15 @@ namespace SimplexMethod
                         return;
                     if (isUnlimited)
                         return;
-                    a++;
+
+                    _coeffsMatrix = constraintsCoeffs;
+                    _simplexDifference = simplexDifference;
+                    _basicIndexes = basicIndexes;
+                    _coeffsValues = constraintsValues;
+                    _targetValue = targetValue;
+                    _iterations = iterations;
+                    iterations++;
+                    
                 }
                 else
                 {
