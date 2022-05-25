@@ -11,18 +11,22 @@ namespace SimplexMethod
             Console.WriteLine("Будьте внимательны! Программа не защищена от ошибок ввода\n");
             Console.WriteLine("Введите max, если решаете задачу максимизации; min, если решаете задачу минимизации: ");
             string method;
-            method = Console.ReadLine();
             bool isMaximization = true;
+            method = Console.ReadLine();
+            if (method == "max")
+                 isMaximization = true;
+            if (method == "min")
+                isMaximization = false;
             //Console.WriteLine("Укажите наибольшее количество переменных в ограничениях: ");
 
-            double[] inputC = new double[] { 1, -2, 1, -8, 1, 1 }; //коэффициенты целевой функции
+            double[] inputC = new double[] { 1, -4, 1, 1, 1, 1 }; //коэффициенты целевой функции
             double[,] inputX = new double[,] { 
-                                                { 1, 4, 1, 3, -2, 1 },
-                                                { 1, 4, -1, -1, 0, 1 },
-                                                { 2, 6, 1, 4, -2, 1 }
+                                                { 1, 1, 1, 1, -1, -1 },
+                                                { 0, 1, 1, -1, -1, -1 },
+                                                { 0, 1, 0, 0, 0, -1 }
                                              };
             string[] conditionsInput = new string[] { "=", "=", "=" };
-            double[] inputB = new double[] { 15, 5, 22 }; 
+            double[] inputB = new double[] { 1, 1, 2 }; 
 
             var simplex = new Simplex(inputC, inputX, conditionsInput, inputB, isMaximization);
             var coeffsMatrix = simplex._coeffsMatrix;
@@ -81,6 +85,9 @@ namespace SimplexMethod
                 Console.Write("   ");
             }
             Console.WriteLine("\nZ = " + Math.Round(targetValue, 2));
+
+            //Вывод решения двойств задачи
+
             return;
         }
     }
@@ -169,7 +176,9 @@ namespace SimplexMethod
                                                                               // Поиск начального целевого вектора (обычно пишем над матрицей коэффициентов)
             if (thereIsArtificialVar) // Если в задаче был знак больше, то для максимизации необходимо ввести числа -M
                 for (int i = 0; i < artificialCount; i++)
-                    targetCoeffs[i + basicsCount + inputLength] = -1000000;
+                    if (isMaximization)
+                        targetCoeffs[i + basicsCount + inputLength] = -1000000;
+                    else targetCoeffs[i + basicsCount + inputLength] = 1000000;
 
             //Расчет целевого значения
             double targetValue = 0;
@@ -187,20 +196,18 @@ namespace SimplexMethod
                 simplexDifference[i] -= targetCoeffs[i];
             }
 
-            int mainColumnIndex = FindMainColumn(simplexDifference);
+            int mainColumnIndex = FindMainColumn(simplexDifference, isMaximization);
             int mainLineIndex = FindMainLine(height, constraintsValues, constraintsCoeffs, mainColumnIndex);
 
             //ОСНОВНОЙ АЛГОРИТМ
             //Пересчет всех значений до тех пор, пока не будут выполнены условия
             bool isNotEnd = true;
             int iterations = 0;
-            while (iterations != 4)
+            while (iterations != 2)
             {               
-                if (isMaximization)
-                {
-                    Maximization(ref constraintsCoeffs, ref simplexDifference, ref basicIndexes, height, ref constraintsValues,
+                    OneIteration(ref constraintsCoeffs, ref simplexDifference, ref basicIndexes, height, ref constraintsValues,
                         inputLength, basicsCount, ref targetValue, ref targetCoeffs, ref isAlternative,
-                        ref isIncompatibility, ref isUnlimited, basicsCount, artificialCount);
+                        ref isIncompatibility, ref isUnlimited, basicsCount, artificialCount, isMaximization);
 
                     if (isAlternative)
                         return;
@@ -216,12 +223,6 @@ namespace SimplexMethod
                     _targetValue = targetValue;
                     _iterations = iterations;
                     iterations++;
-                    
-                }
-                else
-                {
-                    //Minimization();
-                }
 
                 for (int i = 0; i < inputLength + basicsCount + artificialCount; i++)
                 {
@@ -247,12 +248,12 @@ namespace SimplexMethod
         }
 
         //Метод для решения задачи максимизации
-        public static void Maximization(ref double [,] constraintsCoeffs, ref double[] simplexDifference, ref int[] basicIndexes, 
+        public static void OneIteration(ref double [,] constraintsCoeffs, ref double[] simplexDifference, ref int[] basicIndexes, 
             int height, ref double[] constraintsValues, int inputLength, int countToAdd, ref double targetValue, 
             ref double[] targetCoeffs, ref bool isAlternative, ref bool isIncompatibility, ref bool isUnlimited,
-            int basicsCount, int artificialCount)
+            int basicsCount, int artificialCount, bool isMaximization)
         {           
-            int mainColumnIndex = FindMainColumn(simplexDifference);
+            int mainColumnIndex = FindMainColumn(simplexDifference, isMaximization);
             int mainLineIndex = FindMainLine(height, constraintsValues, constraintsCoeffs, mainColumnIndex);
             targetValue = 0;
             for(int i = 0; i < inputLength + basicsCount + artificialCount; i++)
@@ -378,16 +379,28 @@ namespace SimplexMethod
             arr = newArray;
         }
 
-        private static int FindMainColumn(double[] simplexDifference)
+        private static int FindMainColumn(double[] simplexDifference, bool isMaximization)
         {
             int columnIndex = 0;
             double min = double.MaxValue;
+            double max = double.MinValue;
             for (int i = 0; i < simplexDifference.Length; i++)
             {
-                if (min > simplexDifference[i])
+                if (isMaximization)
                 {
-                    min = simplexDifference[i];
-                    columnIndex = i;
+                    if (min > simplexDifference[i])
+                    {
+                        min = simplexDifference[i];
+                        columnIndex = i;
+                    }
+                }
+                else
+                {
+                    if (max < simplexDifference[i])
+                    {
+                        max = simplexDifference[i];
+                        columnIndex = i;
+                    }
                 }
             }
             return columnIndex;
